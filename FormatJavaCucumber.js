@@ -9,9 +9,9 @@ const createDeepCloneOfJsonObject = object => JSON.parse(JSON.stringify(object))
 // Injects the step name into the attachment object, relying on the context of 'this' to be set to a step object 
 // e.g. an arrow function cannot be used
 const injectStepName = function(attachment) {
-    attachment.step_name = ("name" in this) ? this.name : "";
+    attachment.step_name = this.name || "Hook";
     return attachment;
-} 
+}
 
 // Creates a clone of the step before iterating through the attachments contained within it, adding a 'step_name' field
 const attachmentsWithStepNameInjected = (step) => createDeepCloneOfJsonObject(step).embeddings.map(injectStepName, step);
@@ -19,25 +19,25 @@ const attachmentsWithStepNameInjected = (step) => createDeepCloneOfJsonObject(st
 // Flattens a multidimensional array, into a simple array by storing each value in the accumulator
 const flattenArray = (acc, arrayValue) => acc.concat(arrayValue);
 
-// Checks that the passed in object contains an embeddings field
-const hasEmbeddings = object => "embeddings" in object;
+const hasEmbeddings = object => object.hasOwnProperty("embeddings");
 
-// Creates an attachment object, using the passed in attachment and index values
-const attachmentInformation = (attachment, index) => { 
-    return { 
-                name: `${attachment.step_name} Attachment ${index + 1}`,
-                "content_type": attachment.mime_type,
-                data: attachment.data
-            }
+const attachmentInformation = (attachment, index) => {
+    return {
+        name: `${attachment.step_name} Attachment ${index + 1}`,
+        "content_type": attachment.mime_type,
+        data: attachment.data
+    }
 };
 
-// Iterates over each step and grabs all attachments and returns a flat array containing the attachment information
-const getStepAttachments = testCase => testCase.steps.filter(hasEmbeddings).map(attachmentsWithStepNameInjected)
-    .reduce(flattenArray, []).map(attachmentInformation);
+const getStepAttachments = testCase => testCase.steps.filter(hasEmbeddings)
+    .map(attachmentsWithStepNameInjected)
+    .reduce(flattenArray, [])
+    .map(attachmentInformation);
 
-// Iterates over each hook and grabs all attachments and returns a flat array containing the attachment information
-const getHookAttachments = testCase => ("after" in testCase) ? testCase.after.filter(hasEmbeddings).map(attachmentsWithStepNameInjected)
-    .reduce(flattenArray, []).map(attachmentInformation) : [];
+const getHookAttachments = testCase => (testCase.hasOwnProperty("after")) ? testCase.after.filter(hasEmbeddings)
+    .map(attachmentsWithStepNameInjected)
+    .reduce(flattenArray, [])
+    .map(attachmentInformation) : [];
 
 // Grabs all attachments from the hooks and steps and combines them into a single flat array of attachment information
 const getAllAttachments = testCase => getStepAttachments(testCase).concat(getHookAttachments(testCase));
@@ -53,7 +53,7 @@ const Status = {
 }
 
 // Calculates the overall testcase status based on the result of the passed in step, storing the result in the accumulator
-const testCaseStatus = (acc, step) => (Status.PASSED === acc) ? step.result.status: acc;
+const testCaseStatus = (acc, step) => (Status.PASSED === acc) ? step.result.status : acc;
 
 // Gets the testcase status based on the result of each step
 const getTCStatus = testCase => testCase.steps.reduce(testCaseStatus, Status.PASSED);
@@ -69,7 +69,7 @@ const getActualResult = step => {
         [Status.SKIPPED]: "This step has been skipped due to a previous failure",
         [Status.UNDEFINED]: "This step does not match any step definitions",
         [Status.PENDING]: "This step is marked as pending"
-    }[step.result.status];
+    } [step.result.status];
 }
 
 // Generates a step log object for injection into a test log
@@ -83,7 +83,7 @@ const testStepLogs = testCase => testCase.steps.map((step, index) => {
     };
 });
 
-// Injects the feature name and URI into the test case object, relying on the context of 'this' to be set to a test case object 
+// Injects the feature name and URI into the test case object, relying on the context of 'this' to be set to a feature object 
 // e.g. an arrow function cannot be used
 const injectFeatureNameAndUri = function(testCase) {
     testCase.feature_uri = this.uri;
@@ -96,26 +96,31 @@ const testCasesWithFeatureNameAndUriInjected = feature => createDeepCloneOfJsonO
 
 // gets all of the folders after the 'features' directory
 var getModules = URI => {
-    let modules = ["Features"].concat(URI.replace(/.+features\//i,"").split("/"));
+    const subModules = URI.replace(/.+features\//i, "")
+        .split("/");
+
+    const modules = ["Features"].concat(subModules);
     modules.pop();
     return modules;
 }
 
 // Create a new object to represent a test log and populate it's fields
 const testLogs = testCase => ({
-            exe_start_date: new Date(), // TODO These could be passed in
-            exe_end_date: new Date(),
-            module_names: getModules(testCase.feature_uri),
-            name: "name" in testCase ? testCase.name : "Unnamed",
-            automation_content: testCase.feature_uri + "#" + testCase.name,
-            attachments: getAllAttachments(testCase),
-            status: getTCStatus(testCase),
-            test_step_logs: testStepLogs(testCase),
-            featureName: testCase.feature_name,
-        });
+    exe_start_date: new Date(), // TODO These could be passed in
+    exe_end_date: new Date(),
+    module_names: getModules(testCase.feature_uri),
+    name: testCase.hasOwnProperty("name") ? testCase.name : "Unnamed",
+    automation_content: testCase.feature_uri + "#" + testCase.name,
+    attachments: getAllAttachments(testCase),
+    status: getTCStatus(testCase),
+    test_step_logs: testStepLogs(testCase),
+    featureName: testCase.feature_name,
+});
 
 // Loops through all of the features and test cases creating a test log for each
-const generateTestLogs = features => features.map(testCasesWithFeatureNameAndUriInjected).reduce(flattenArray, []).map(testLogs);
+const generateTestLogs = features => features.map(testCasesWithFeatureNameAndUriInjected)
+    .reduce(flattenArray, [])
+    .map(testLogs);
 
 // Entry point to the script, it takes the cucumber json input and reformat it into qTest Manager friendly
 // json before handing it off to the down stream rule
