@@ -18,12 +18,15 @@ const setConfigAndRetrieveSDK = (scenarioUrl, qtestToken, scenarioProjectId) => 
 const loggingOutError = err => console.log('Error updating colors: ' + err);
 
 // @impure: reliant on state object
-const addingStatusToStep = (sdkStep, status) => state.sdk.updateStep(sdkStep.id, Object.assign(sdkStep, { "status": status }));
+const addingStatusToStep = (sdkStep, status) => state.sdk.updateStep(
+    sdkStep.id,
+    Object.assign(sdkStep, { "status": status })
+);
 
 // @impure: reliant on network
 const asyncronouslyUpdateTheStatusOfEachStep = (sdkSteps, status) => Promise.all(sdkSteps.map((sdkStep) => addingStatusToStep(sdkStep, status)));
 
-// Grabs all of the steps matching the step description using the Scenario API and then updates there status based on the test results
+// Grabs all of the steps matching the step description using the Scenario API and then updates their status based on the test results
 // Note - Whilst the test results can feature a step multiple times, the API only appears to return a single instance, so the status will get set multiple times, and if there is 
 // different a statuses the last one set will win  E.g. in one instance the step passed and in another it failed you are at the mercy of the order in which the promises resolve as to
 // which gets set in Scenario.
