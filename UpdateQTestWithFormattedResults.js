@@ -1,72 +1,81 @@
-const request = require('request');
 const { Webhooks } = require('@qasymphony/pulse-sdk');
-const ScenarioSdk = require('@qasymphony/scenario-sdk');
 
-const Features = {
-    getIssueLinkByFeatureName(qtestToken, scenarioProjectId, name) {
-        return new ScenarioSdk.Features({ qtestToken, scenarioProjectId }).getFeatures(`"${name}"`);
+// @pure
+const State = {
+    triggers: null,
+};
+
+// @pure
+const isNotBackground = ({ keyword }) => keyword.toLowerCase() !== 'background';
+
+// @pure
+const getHeaders = (token) => ({
+    'Content-Type': 'application/json',
+    'Authorization': `bearer ${token}`
+});
+
+// @pure
+const getBody = (cycleId, testLogs) => JSON.stringify({
+    test_cycle: cycleId,
+    test_logs: testLogs
+});
+
+// @pure
+const generateRequest = (constants, cycleId, projectId, testLogs) => {
+    const { ManagerURL, QTEST_TOKEN } = constants;
+
+    const url = `http://${ManagerURL}/api/v3/projects/${projectId}/auto-test-logs?type=automation`;
+
+    const data = {
+        method: "POST",
+        headers: getHeaders(QTEST_TOKEN),
+        body: getBody(cycleId, testLogs)
+    };
+
+    return new Request(url, data);
+};
+
+// @impure: reliant on network connectivity
+const emitEvent = (name, payload) => {
+    const t = State.triggers.find(t => t.name === name);
+    return t && new Webhooks().invoke(t, payload);
+};
+
+// @impure: reliant on network connectivity
+async function postTestLogsToTestManager(request) {
+    const response = await fetch(request);
+    const resbody = await response.json();
+
+    emitEvent('SlackEvent', { AutomationLogUploaded: resbody });
+
+    if (resbody.type === "AUTOMATION_TEST_LOG") {
+        return Promise.resolve("Uploaded results successfully");
+    }
+
+    emitEvent('SlackEvent', { Error: "Wrong type" });
+    return Promise.reject("Unable to upload test results");
+};
+
+// @impure: reliant on network connectivity and uses I/O
+async function postLogsAndCallAdditionalPulseActions(request, payload) {
+    try {
+        const response = await postTestLogsToTestManager(request);
+        console.log(response);
+        emitEvent('LinkScenarioRequirements', payload);
+    } catch (error) {
+        emitEvent('SlackEvent', { CaughtError: error.message });
     }
 };
 
-exports.handler = function ({ event: body, constants, triggers }, context, callback) {
-    function emitEvent(name, payload) {
-        let t = triggers.find(t => t.name === name);
-        return t && new Webhooks().invoke(t, payload);
-    }
+// @impure: sets state, relies on network connectivity and uses I/O
+exports.handler = ({ event: body, constants, triggers }, context, callback) => {
+    State.triggers = triggers;
 
-    // Specific to pulse actions
-    var payload = body;
+    const { logs, "test-cycle": cycleId, projectId } = body;
 
-    var testLogs = payload.logs;
-    var cycleId = payload["test-cycle"];
-    var projectId = payload.projectId;
+    const testLogs = logs.filter(isNotBackground);
 
-    var scenarioCount = 0;
-    var scenarioList = "";
+    const request = generateRequest(constants, cycleId, projectId, testLogs);
 
-    var standardHearders = {
-        'Content-Type': 'application/json',
-        'Authorization': `bearer ${constants.QTEST_TOKEN}`
-    }
-
-    var createLogsAndTCs = function () {
-        var opts = {
-            url: "http://" + constants.ManagerURL + "/api/v3/projects/" + projectId + "/auto-test-logs?type=automation",
-            json: true,
-            headers: standardHearders,
-            body: {
-                test_cycle: cycleId,
-                test_logs: testLogs
-            }
-        };
-
-        return request.post(opts, function (err, response, resbody) {
-
-            if (err) {
-                Promise.reject(err);
-            }
-            else {
-                console.log('response from qTest Manager:', JSON.stringify(response))
-                emitEvent('SlackEvent', { AutomationLogUploaded: resbody });
-
-                if (response.body.type == "AUTOMATION_TEST_LOG") {
-                    Promise.resolve("Uploaded results successfully");
-                }
-                else {
-                    emitEvent('SlackEvent', { Error: "Wrong type" });
-                    Promise.reject("Unable to upload test results");
-                }
-            }
-        });
-    };
-
-    createLogsAndTCs()
-        .on('response', function () {
-            console.log("About to call Link Requirements Rule")
-            emitEvent('LinkScenarioRequirements', payload);
-            //linkReq();
-        })
-        .on('error', function (err) {
-            emitEvent('SlackEvent', { CaughtError: err });
-        })
-}
+    postLogsAndCallAdditionalPulseActions(request, body);
+};
