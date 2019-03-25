@@ -21,9 +21,7 @@ const getBody = (cycleId, testLogs) => JSON.stringify({
 });
 
 // @pure
-const generateRequest = (constants, cycleId, projectId, testLogs) => {
-    const { ManagerURL, QTEST_TOKEN } = constants;
-
+const generateRequest = ({ ManagerURL, QTEST_TOKEN }, cycleId, projectId, testLogs) => {
     const url = `http://${ManagerURL}/api/v3/projects/${projectId}/auto-test-logs?type=automation`;
 
     const data = {
@@ -61,9 +59,13 @@ async function postLogsAndCallAdditionalPulseActions(request, payload) {
     try {
         const response = await postTestLogsToTestManager(request);
         console.log(response);
-        emitEvent('LinkScenarioRequirements', payload);
-    } catch (error) {
-        emitEvent('SlackEvent', { CaughtError: error.message });
+        await emitEvent('LinkScenarioRequirements', payload);
+        await emitEvent('UpdateDescriptionPreconditionAndPrettify', payload);
+
+    } catch ({ url, status, statusText }) {
+        const errorMessage = `url: ${url}, status: ${status}, status text: ${statusText}`;
+        console.log('Caught Error:', errorMessage);
+        emitEvent('SlackEvent', { CaughtError: errorMessage });
     }
 };
 
