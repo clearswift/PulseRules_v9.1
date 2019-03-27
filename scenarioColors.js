@@ -1,7 +1,22 @@
 const ScenarioSdk = require('@qasymphony/scenario-sdk');
 
 // @pure
-const state = {
+const flattenArray = (acc, arrayValue) => acc.concat(arrayValue);
+
+// @pure
+const testStepLogs = ({ test_step_logs }) => test_step_logs;
+
+// @pure
+const steps = logs => logs
+    .map(testStepLogs)
+    .reduce(flattenArray);
+
+// Ensures the status matches a status supported by Scenario: One of PASSED (green), FAILED (red), or SKIPPED (yellow)
+// @pure
+const processStatus = ({ status }) => ("undefined" === status) ? "FAILED" : status.toUpperCase();
+
+// @impure: mutable
+const State = {
     sdk: null
 }
 
@@ -18,7 +33,7 @@ const setConfigAndRetrieveSDK = (scenarioUrl, qtestToken, scenarioProjectId) => 
 const loggingOutError = err => console.log('Error updating colors: ' + err);
 
 // @impure: reliant on state object
-const addingStatusToStep = (sdkStep, status) => state.sdk.updateStep(
+const addingStatusToStep = (sdkStep, status) => State.sdk.updateStep(
     sdkStep.id,
     Object.assign(sdkStep, { "status": status })
 );
@@ -35,25 +50,10 @@ const asyncronouslyUpdateTheStatusOfEachStep = (sdkSteps, status) => Promise.all
 // This is a limitation of the Scenario SDK and should be raised with Tricentis.
 // @impure: reliant on state object
 const updateStepResults = (name, status) => {
-    state.sdk.getSteps(`"${name}"`)
+    State.sdk.getSteps(`"${name}"`)
         .then(sdkSteps => asyncronouslyUpdateTheStatusOfEachStep(sdkSteps, status))
         .catch(loggingOutError);
 }
-
-// @pure
-const flattenArray = (acc, arrayValue) => acc.concat(arrayValue);
-
-// @pure
-const testStepLogs = ({ test_step_logs }) => test_step_logs;
-
-// @pure
-const steps = logs => logs
-    .map(testStepLogs)
-    .reduce(flattenArray);
-
-// Ensures the status matches a status supported by Scenario: One of PASSED (green), FAILED (red), or SKIPPED (yellow)
-// @pure
-const processStatus = ({ status }) => ("undefined" === status) ? "FAILED" : status.toUpperCase();
 
 // @impure: calls updateStepResults which is reliant on network
 const updateStep = (step, index) => updateStepResults(step.expected_result, processStatus(step));
@@ -62,7 +62,7 @@ const updateStep = (step, index) => updateStepResults(step.expected_result, proc
 exports.handler = function({ event: body, constants, triggers }, context, callback) {
     const payload = body;
 
-    state.sdk = setConfigAndRetrieveSDK(constants.Scenario_URL, constants.QTEST_TOKEN, constants.SCENARIO_PROJECT_ID);
+    State.sdk = setConfigAndRetrieveSDK(constants.Scenario_URL, constants.QTEST_TOKEN, constants.SCENARIO_PROJECT_ID);
 
     steps(payload.logs).forEach(updateStep);
 }
