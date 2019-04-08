@@ -1,6 +1,4 @@
 const PulseSdk = require('@qasymphony/pulse-sdk');
-const request = require('request');
-const xml2js = require('xml2js');
 
 // @pure
 const isBackground = ({ keyword }) => keyword.toLowerCase() === 'background';
