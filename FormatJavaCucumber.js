@@ -114,7 +114,9 @@ const testLogs = testCase => ({
     attachments: getAllAttachments(testCase),
     status: getTCStatus(testCase),
     test_step_logs: testStepLogs(testCase),
+    keyword: testCase.keyword,
     featureName: testCase.feature_name,
+    description: testCase.description,
 });
 
 // Loops through all of the features and test cases creating a test log for each
