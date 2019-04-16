@@ -98,7 +98,7 @@ const getOptions = () => {
 }
 
 // @impure: reliant on mutable object State
-const getManagerSearchUrl = () => `https://${State.constants.ManagerURL}/api/v3/projects/${State.projectId}/search`;
+const getManagerSearchUrl = () => `${State.constants.ManagerURL}/api/v3/projects/${State.projectId}/search`;
 
 // @impure: reliant on mutable object State
 const testCasesFromManager = tcName => {
@@ -116,7 +116,7 @@ const requirementsFromManager = key => {
 
 // @impure: reliant on mutable object State
 const testCaseLinkOnRequirement = (reqId, testCaseId) => {
-    const url = `https://${State.constants.ManagerURL}/api/v3/projects/${State.projectId}/requirements/${reqId}/link?type=test-cases`
+    const url = `${State.constants.ManagerURL}/api/v3/projects/${State.projectId}/requirements/${reqId}/link?type=test-cases`
     const headers = getStandardHeaders();
     return linksRequest(url, headers, reqId, testCaseId)
 }

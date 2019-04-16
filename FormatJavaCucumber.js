@@ -48,17 +48,34 @@ const getAllAttachments = testCase => getStepAttachments(testCase).concat(getHoo
 // @pure
 const testCasesWithFeatureNameAndUriInjected = feature => createDeepCloneOfJsonObject(feature).elements.map(injectFeatureNameAndUri, feature);
 
+// @pure
+const moduleThatHasFeatureFileExtension = (module) => module.includes(".FEATURE");
+
+// @pure
+const getLowerCaseFeatureNameNoExtension = name => name.toLowerCase()
+    .replace(".feature", "");
+
+// @pure
+const getUpperCaseSubModules = url => url.replace(/.+features\//i, "")
+    .toUpperCase()
+    .split("/");
+
+// @pure
+const addParentFeaturesModuleAndReplaceLastModule = (moduleArray, replacementModule) => {
+    const modules = ["FEATURES"].concat(moduleArray);
+    modules.pop();
+    modules.push(replacementModule);
+    return modules;
+}
+
 // gets all of the folders after the 'features' directory
 // @pure
-var getModules = URI => {
-    const url = URI;
-    const subModules = url.replace(/.+features\//i, "")
-        .replace(".feature", "")
-        .toLowerCase()
-        .split("/");
-
-    const modules = ["Features"].concat(subModules);
-    return modules;
+const getModules = URI => {
+    const subModules = getUpperCaseSubModules(URI);
+    const featureName = getLowerCaseFeatureNameNoExtension(
+        subModules.find(moduleThatHasFeatureFileExtension)
+    );
+    return addParentFeaturesModuleAndReplaceLastModule(subModules, featureName);
 }
 
 // Injects the step name into the attachment object, relying on the context of 'this' to be set to a step object 

@@ -22,7 +22,7 @@ const getBody = (cycleId, testLogs) => JSON.stringify({
 
 // @pure
 const generateRequest = ({ ManagerURL, QTEST_TOKEN }, cycleId, projectId, testLogs) => {
-    const url = `http://${ManagerURL}/api/v3/projects/${projectId}/auto-test-logs?type=automation`;
+    const url = `${ManagerURL}/api/v3/projects/${projectId}/auto-test-logs?type=automation`;
 
     const data = {
         method: "POST",
@@ -62,8 +62,12 @@ async function postLogsAndCallAdditionalPulseActions(request, payload) {
         await emitEvent('LinkScenarioRequirements', payload);
         await emitEvent('UpdateDescriptionPreconditionAndPrettify', payload);
 
-    } catch ({ url, status, statusText }) {
-        const errorMessage = `url: ${url}, status: ${status}, status text: ${statusText}`;
+    } catch (error) {
+        const { url, status, statusText } = error;
+        const errorMessage = (url != null) ?
+            `url: ${url}, status: ${status}, status text: ${statusText}` :
+            error;
+
         console.log('Caught Error:', errorMessage);
         emitEvent('SlackEvent', { CaughtError: errorMessage });
     }
