@@ -27,7 +27,7 @@ const convertStepLogsToPrecondition = ({ keyword, name, description, test_step_l
     const paragraphs = test_step_logs.map(convertStepToSpanWithBreak);
 
     return `${header}${summary}${paragraphs.join("")}`;
-}
+};
 
 // @pure
 const isDuplicateField = (item, index, array, property) => array.map(object => object[property])
@@ -46,7 +46,10 @@ const isNotABackgroundAndHasAMatchingFeatureName = ({ keyword, featureName }, na
     (featureName === nameToMatch) && (keyword.toLowerCase() !== 'background');
 
 // @pure
-const getSearchUrl = (managerUrl, projectId) => `https://${managerUrl}/api/v3/projects/${projectId}/search`
+const getSearchUrl = (managerUrl, projectId) => `${managerUrl}/api/v3/projects/${projectId}/search`;
+
+// @pure
+const getApproveTestCaseUrl = (managerUrl, projectId, id) => `${managerUrl}/api/v3/projects/${projectId}/test-cases/${id}/approve`
 
 // @pure
 const getSearchBody = name => ({
@@ -56,7 +59,7 @@ const getSearchBody = name => ({
 });
 
 // @pure
-const getUpdateTestCaseUrl = (managerUrl, projectId, id) => `https://${managerUrl}/api/v3/projects/${projectId}/test-cases/${id}`;
+const getUpdateTestCaseUrl = (managerUrl, projectId, id) => `${managerUrl}/api/v3/projects/${projectId}/test-cases/${id}`;
 
 // @pure
 const formatDescriptionIfNotEmpty = description => description !== "" ? convertDescriptionToParagraph(description) : "";
@@ -78,7 +81,7 @@ const State = {
     managerUrl: null,
     qTestToken: null,
     logs: null
-}
+};
 
 // @impure: reliant on network and mutable state
 const performApiCall = async function(url, method, body) {
@@ -91,7 +94,20 @@ const performApiCall = async function(url, method, body) {
     const response = await fetch(url, payload);
 
     return response.json();
-}
+};
+
+// @impure: reliant on network and mutable state
+const performApiCallEmptyBody = async function(url, method) {
+    const { qTestToken } = state;
+    const payload = {
+        method: method,
+        headers: getHeaders(qTestToken)
+    }
+
+    const response = await fetch(url, payload);
+
+    return response.json();
+};
 
 // @impure: reliant on network and mutable state and uses I/O
 const getTestCaseId = async function({ name }) {
@@ -113,7 +129,7 @@ const getTestCaseId = async function({ name }) {
     }
 
     return Promise.resolve(resbody.items[0].id);
-}
+};
 
 // @impure: reliant on network and mutable state
 const updateAllTestCases = async function(testCase) {
@@ -122,16 +138,24 @@ const updateAllTestCases = async function(testCase) {
     const id = await getTestCaseId(testCase);
 
     return await updateTestCaseFields(id, precondition, description);
-}
+};
 
 // @impure: reliant on network and mutable state
-async function updateTestCaseFields(id, precondition, description) {
+const approveAllTestCases = async function(testCase) {
+    const { managerUrl, projectId } = State;
+    const id = await getTestCaseId(testCase);
+    const url = await getApproveTestCaseUrl(managerUrl, projectId, id);
+    return await performApiCallEmptyBody(url, "PUT");
+};
+
+// @impure: reliant on network and mutable state
+const updateTestCaseFields = async function(id, precondition, description) {
     const { managerUrl, projectId } = State;
     const url = getUpdateTestCaseUrl(managerUrl, projectId, id);
     const body = getUpdateTestCaseBody(precondition, description);
 
     return await performApiCall(url, "PUT", body);
-}
+};
 
 // @impure: reliant on network and mutable state
 async function generatePreconditionAndPostToManager(background) {
@@ -142,10 +166,16 @@ async function generatePreconditionAndPostToManager(background) {
         log => isNotABackgroundAndHasAMatchingFeatureName(log, nameToMatch)
     );
 
-    return await Promise.all(
+    const updates = await Promise.all(
         matchingTestCases.map(updateAllTestCases, precondition)
     );
-}
+
+    const approvals = await Promise.all(
+        matchingTestCase.map(approveAllTestCases)
+    );
+
+    return updates.concat(approvals);
+};
 
 // Entry point to the script
 // @impure: reliant on network and uses I/O
@@ -170,4 +200,4 @@ exports.handler = async function({ event: body, constants, triggers }, context, 
     }
 
     console.log("End of job");
-}
+};
